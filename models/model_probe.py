@@ -118,6 +118,7 @@ class ProbeModule(ModelBase):
     def compute_loss(
         self,
         batch: torch.Tensor,  # Shape is (batch_size, seq_len)
+        targets: torch.Tensor,  # Shape is (batch_size, seq_len-1)
         backpropagate: bool,  # Run backward pass if true, otherwise only compute loss
         loss_div: int = 1,  # Loss will be divided by this number
         eval_mode: bool = False,  # If True, use eval mode for CVAE

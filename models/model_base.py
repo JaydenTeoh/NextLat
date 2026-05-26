@@ -109,6 +109,7 @@ class ModelBase:
     def compute_loss(
         self,
         batch: torch.Tensor,  # Shape is (batch_size, seq_len)
+        targets: torch.Tensor,  # Shape is (batch_size, seq_len)
         backpropagate: bool,  # Run backward pass if true, otherwise only compute loss
         no_sync: bool = False,  # If True, don't sync gradients across multiple GPUs
         loss_div: int = 1,  # Loss will be divided by this number

@@ -310,7 +310,18 @@ class NextLat(ModelBase, SpeculativeModel):
         # ------------------------------------------------------------
         # Next-Latent KL/CE losses
         # ------------------------------------------------------------
-        pred_token_inputs = pred_h_t_next[:, :-1]
+        # Align prediction length with target length:
+        # - Standard shifted layout: pred_h_t_next is one step longer than target_tokens
+        #   (the last predicted hidden state has no corresponding next-token target),
+        #   so we drop trailing positions.
+        # - A5 layout: pred_h_t_next and target_tokens already share the same length,
+        #   so no slicing is needed.
+        pred_len = pred_h_t_next.shape[1]
+        tgt_len = target_tokens.shape[1]
+        if pred_len > tgt_len:
+            pred_token_inputs = pred_h_t_next[:, :tgt_len]
+        else:
+            pred_token_inputs = pred_h_t_next
         # Keep NextLat CE/KL from updating lm_head by using detached head weights.
         # Have to materialize student logits to compute KL loss
         lm_head_weight = self.model.lm_head.weight.detach()
@@ -322,9 +333,12 @@ class NextLat(ModelBase, SpeculativeModel):
             ignore_index=-100,
             reduction="mean",
         )
-        # Detach teacher logits to avoid updating teacher computation graph
+        # Detach teacher logits to avoid updating teacher computation graph.
+        # teacher_logits may also be longer than pred_tokens in the standard layout;
+        # trim to the same length so KL is well-defined.
+        teacher_logits_aligned = teacher_logits[:, : pred_tokens.shape[1]]
         kl_loss = self._categorical_kl_loss(
-            teacher_logits.detach(), pred_tokens, token_pred_mask
+            teacher_logits_aligned.detach(), pred_tokens, token_pred_mask
         )
 
         return MSE, token_loss, kl_loss
@@ -349,7 +363,12 @@ class NextLat(ModelBase, SpeculativeModel):
         # ------------------------------------------------------------
         # Standard next-token prediction loss
         # ------------------------------------------------------------
-        text_embd = hidden_states_det[:, :-1]
+        if targets.shape[1] != hidden_states_det.shape[1]:
+            # Standard shifted next-token layout: targets has length seq_len-1
+            text_embd = hidden_states_det[:, :-1]
+        else:
+            # A5 layout: targets is a separate length-T block aligned with all T hidden states
+            text_embd = hidden_states_det
         # We need explicit logits for KL(teacher || student)
         teacher_logits = self.model.lm_head(text_embd)
         ntp_loss = F.cross_entropy(
@@ -412,6 +431,7 @@ class NextLat(ModelBase, SpeculativeModel):
     def compute_loss(
         self,
         batch: torch.Tensor,  # Shape is (batch_size, seq_len)
+        targets: torch.Tensor,  # Shape is (batch_size, seq_len-1)
         backpropagate: bool,  # Run backward pass if true, otherwise only compute loss
         no_sync: bool = False,  # If True, don't sync gradients across multiple GPUs
         loss_div: int = 1,  # Loss will be divided by this number
@@ -428,29 +448,26 @@ class NextLat(ModelBase, SpeculativeModel):
         # Predict next token for all tokens before the last token
         batch_size, seq_len = batch.shape
         inputs = batch
-        targets = batch[:, 1:]
 
         # Create mask for positions where next token, i.e., x_{t+1}, is EOS
         # These positions should be excluded from NextLat token prediction loss because
         # next next token prediction, i.e, (h_t, x_{t+1}) -> h_{t+1} -> x_{t+2}, crosses documents.
-        curr_token_is_eos = inputs == self.config.eos_token_id
-        nextlat_token_pred_mask = ~curr_token_is_eos[
-            :, :-1
-        ]  # Shape: (batch_size, seq_len-1)
+        curr_token_is_eos = targets == self.config.eos_token_id
+        nextlat_token_pred_mask = ~curr_token_is_eos
+        if targets.shape[1] != inputs.shape[1]:
+            nextlat_token_pred_mask = nextlat_token_pred_mask[:, :-1]
 
         if self.config.context_length > 0:
             # Create context mask: mask positions less than context_length
             # Sequence:    [ A,  B,  C, EOS, D, E, F, G, H, EOS, I, J]
             # pos_ids:     [ 1,  2,  3,  0,  1, 2, 3, 4, 5,  0,  1, 2]
-            pos_ids = self.model.create_position_indices(batch)
+            pos_ids = self.model.create_position_indices(targets)
             context_length_mask = (pos_ids <= self.config.context_length + 1) & (
                 pos_ids != 0
             )
-            targets = targets.masked_fill(context_length_mask[:, 1:], -100)
+            targets = targets.masked_fill(context_length_mask, -100)
 
-            nextlat_token_pred_mask = (
-                nextlat_token_pred_mask & ~context_length_mask[:, 1:]
-            )
+            nextlat_token_pred_mask = nextlat_token_pred_mask & ~context_length_mask
             assert nextlat_token_pred_mask.shape == (batch_size, seq_len - 1)
 
         # If using FSDP, we ignore no_sync and always sync gradients

@@ -30,6 +30,7 @@ from data.stargraph import StarGraphDataModule
 from data.fineweb import FineWebDataModule
 from data.countdown import CountdownDataModule
 from data.manhattan_dataset import ManhattanDataModule
+from data.a5_data import A5DataModule
 
 DATAMODULES = {
     "tinystories": TinyStoriesDataModule,
@@ -39,6 +40,7 @@ DATAMODULES = {
     "finewebedu": FineWebDataModule,
     "countdown": CountdownDataModule,
     "manhattan": ManhattanDataModule,
+    "a5": A5DataModule,
 }
 
 

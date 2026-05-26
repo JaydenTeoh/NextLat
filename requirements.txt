@@ -15,3 +15,8 @@ networkx==3.3
 folium==0.16.0
 selenium
 gdown
+
+# for a5
+fire>=0.5
+polars>=0.19
+pyrootutils>=1.0

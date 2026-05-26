@@ -1,0 +1,67 @@
+use_nextlat: true
+
+trainer:
+  epochs: -1
+  train_batches: 400000 # 800,000 training examples, ~500 epochs
+  val_batches: 100
+  test_batches: 100
+  val_only: false
+  val_printsamples: false
+  log_interval: 1
+  val_interval: 5000
+  test_interval: 5000
+  save_last_checkpoint: false
+  save_best_checkpoint: false
+  always_save_checkpoint: false
+  save_recovery_checkpoint: -1
+  keep_checkpoint_steps: []
+  out_dir: output/a5
+  init_from: scratch
+  log_to_file: true
+  log_to_wandb: true
+  wandb_project: "a5"
+  compile: true
+  use_fused_kernels: false
+  garbage_collect: -1
+  print_samples: false
+  sampling_mode: AR
+  experiment_name: NextLat-2layer-12tok
+data:
+  dataset: a5
+  effective_batch_size: 1024
+  gradient_accum_steps: 1
+  pair_accum_steps: 1
+  goal_range: [25, 75]
+  num_workers: 0
+  A5_data_path: "data/a5/A5=12.csv"
+  test_generalization: true
+  A5_generalization_data_path: "data/a5/A5=36.csv"
+  num_target_tokens: 12
+
+model:
+  n_layer: 2
+  n_head: 8
+  n_embd: 512
+  dropout: 0.0
+  bias: false
+  vocab_size: 0 #will be overwritten by datamodule
+  block_size: 1024
+  context_length: 0
+  gpt_mode: next_token
+  lambda_kl: 0.0
+  mtp_horizon: 1
+  lambda_mse: 1.0
+  proj_factor: 0.5
+
+optimizer:
+  optimizer_type: adam
+  learning_rate: 1e-4
+  weight_decay: 0.01
+  beta1: 0.9
+  beta2: 0.95
+  grad_clip: 1
+
+# lr_scheduler:
+#   schedule: cosine
+#   warmup_iters: 0
+#   warmdown_iters: 400000

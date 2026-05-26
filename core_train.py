@@ -342,7 +342,8 @@ class Trainer:
         self.train_dataloader = datamodule.train_dataloader()
         self.val_dataloader = datamodule.val_dataloader()
         if (
-            self.config.data.dataset == "stargraph"
+            self.config.data.dataset == "a5"
+            or self.config.data.dataset == "stargraph"
             or self.config.data.dataset == "countdown"
             or self.config.data.dataset == "manhattan"
         ) and self.config.data.test_generalization:
@@ -490,8 +491,16 @@ class Trainer:
 
                     # Only sync gradients for the last step
                     no_sync = accum_step < self.config.data.gradient_accum_steps - 1
+                    if self.config.data.dataset == "a5":
+                        # Dataset yields concat(input, target); model consumes input, predicts target.
+                        split = sub_batch.shape[-1] // 2
+                        targets = sub_batch[:, split:]
+                        sub_batch = sub_batch[:, :split]
+                    else:
+                        targets = sub_batch[:, 1:]
                     losses_dict = self.model.compute_loss(
                         sub_batch,
+                        targets=targets,
                         pair_batch_size=self.config.data.pair_batch_size,
                         backpropagate=True,
                         loss_div=self.config.data.gradient_accum_steps,
@@ -630,8 +639,16 @@ class Trainer:
                 end_idx = (accum_step + 1) * self.config.data.micro_batch_size
                 sub_batch = batch[start_idx:end_idx]
 
+                if self.config.data.dataset == "a5":
+                    split = sub_batch.shape[-1] // 2
+                    targets = sub_batch[:, split:]
+                    sub_batch = sub_batch[:, :split]
+                else:
+                    targets = sub_batch[:, 1:]
+
                 loss = self.model.compute_loss(
                     sub_batch,
+                    targets=targets,
                     pair_batch_size=self.config.data.pair_batch_size,
                     backpropagate=False,
                     loss_div=self.config.data.gradient_accum_steps,
@@ -690,6 +707,26 @@ class Trainer:
                             show_progress_bar=self.show_progress_bar,
                             generalization=True,
                         )
+                    )
+                    validation_logs.update(acc_logs)
+            # A5
+            elif self.config.data.dataset == "a5":
+                acc_logs = self.val_dataloader.dataset.evaluate_a5(
+                    self.model,
+                    self.val_dataloader,
+                    self.config,
+                    self.fabric,
+                    show_progress_bar=self.show_progress_bar,
+                )
+                validation_logs.update(acc_logs)
+                if self.config.data.test_generalization:
+                    acc_logs = self.generalization_dataloader.dataset.evaluate_a5(
+                        self.model,
+                        self.generalization_dataloader,
+                        self.config,
+                        self.fabric,
+                        show_progress_bar=self.show_progress_bar,
+                        generalization=True,
                     )
                     validation_logs.update(acc_logs)
             # countdown

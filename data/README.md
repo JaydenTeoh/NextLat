@@ -73,6 +73,18 @@ No data preparation is necessary. The `TinyStoriesDataModule` class (see `data/t
 
 ---
 
+## State Tracking
+
+For the A5 state tracking dataset, run:
+
+```bash
+python data/a5/prepare.py --group A5 --k 12 --samples 1000000 --seed 444
+python data/a5/prepare.py --group A5 --k 36 --samples 1000000 --seed 444
+```
+- `--k` determines the length of the sequences. 
+
+---
+
 ## FineWeb-Edu
 
 We pretokenize the [FineWeb-Edu](https://arxiv.org/abs/2406.17557) dataset (~100B tokens), streamed from [Hugging Face](https://huggingface.co/datasets/HuggingFaceFW/fineweb-edu), using the GPT-2 tokenizer:

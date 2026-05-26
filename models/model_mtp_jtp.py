@@ -399,16 +399,20 @@ class JTPTransformer(DocumentRelativePositions, FusedCrossEntropyLoss, nn.Module
             # Compute losses.
             targets_ntp = targets
             if self.config.context_length > 0:
+                pos_ids = self.model.create_position_indices(targets)
                 # Create context mask: mask positions less than context_length
                 # Sequence:    [ A,  B,  C, EOS, D, E, F, G, H, EOS, I, J]
                 # pos:         [ 1,  2,  3,  0,  1, 2, 3, 4, 5,  0,  1, 2]
-                context_length_mask = (pos <= self.config.context_length + 1) & (
+                context_length_mask = (pos_ids <= self.config.context_length + 1) & (
                     pos != 0
                 )
-                targets_ntp = targets_ntp.masked_fill(context_length_mask[:, 1:], -100)
+                targets_ntp = targets_ntp.masked_fill(context_length_mask, -100)
+
+            if targets.shape[-1] != batch.shape[-1]:
+                ntp_final = ntp_final[:, :-1]
 
             loss_ntp = self.cross_entropy_loss(
-                input=ntp_final[:, :-1, :],
+                input=ntp_final,
                 last_layer=self.lm_head,
                 targets=targets_ntp,
             )
@@ -471,6 +475,7 @@ class JTP(ModelBase, SpeculativeModel):
     def compute_loss(
         self,
         batch: torch.Tensor,  # Shape is (batch_size, seq_len)
+        targets: torch.Tensor,  # Shape is (batch_size, seq_len-1)
         backpropagate: bool,  # Run backward pass if true, otherwise only compute loss
         no_sync: bool = False,  # If True, don't sync gradients across multiple GPUs
         loss_div: int = 1,  # Loss will be divided by this number
@@ -486,7 +491,6 @@ class JTP(ModelBase, SpeculativeModel):
 
         # use full input to create teacher and target indices
         inputs = batch
-        targets = batch[:, 1:]
 
         # If using FSDP, we ignore no_sync and always sync gradients
         # This allows us to re-shard each layer of the model after backward pass

@@ -336,6 +336,7 @@ class GPT(ModelBase):
     def compute_loss(
         self,
         batch: torch.Tensor,  # Shape is (batch_size, seq_len)
+        targets: torch.Tensor,  # Shape is (batch_size, seq_len-1)
         backpropagate: bool,  # Run backward pass if true, otherwise only compute loss
         no_sync: bool = False,  # If True, don't sync gradients across multiple GPUs
         loss_div: int = 1,  # Loss will be divided by this number
@@ -350,8 +351,10 @@ class GPT(ModelBase):
         self._assert_fabric_is_setup()
 
         # Predict next token for all tokens before the last token
-        inputs = batch[:, :-1]
-        targets = batch[:, 1:]
+        if targets.shape[-1] != batch.shape[-1]:
+            inputs = batch[:, :-1]
+        else:
+            inputs = batch  # for a5 dataset
 
         if self.config.is_fim_mode:
             # Create FIM loss mask
@@ -363,11 +366,11 @@ class GPT(ModelBase):
             # Create context mask: mask positions less than context_length
             # Sequence:    [ A,  B,  C, EOS, D, E, F, G, H, EOS, I, J]
             # pos_ids:     [ 1,  2,  3,  0,  1, 2, 3, 4, 5,  0,  1, 2]
-            pos_ids = self.model.create_position_indices(batch)
+            pos_ids = self.model.create_position_indices(targets)
             context_length_mask = (pos_ids <= self.config.context_length + 1) & (
                 pos_ids != 0
             )
-            targets = targets.masked_fill(context_length_mask[:, 1:], -100)
+            targets = targets.masked_fill(context_length_mask, -100)
 
         # If using FSDP, we ignore no_sync and always sync gradients
         # This allows us to re-shard each layer of the model after backward pass
