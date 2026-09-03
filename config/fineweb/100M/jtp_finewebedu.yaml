@@ -30,7 +30,7 @@ trainer:
   spec_eval_num_samples: 16
   spec_eval_prompt_tokens: 128
   spec_eval_max_new_tokens: 128
-  spec_eval_gamma: 4
+  spec_eval_gamma: 3
   spec_eval_top_k: 1
   spec_eval_temperature: 1.0
 
