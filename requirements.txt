@@ -5,7 +5,7 @@ omegaconf>=2.3.0
 wandb
 trl
 scikit-learn
-lightning
+lightning>=2.6.1
 lm_eval
 boto3
 

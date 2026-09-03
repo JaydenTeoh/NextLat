@@ -4,8 +4,10 @@ trainer:
   train_batches: 100000
   val_batches: -1
   val_only: false
+  val_printsamples: false
   log_interval: 10
   val_interval: 1000
+  test_interval: 1000
   out_dir: output/tinystories
   init_from: scratch
   log_to_file: true
